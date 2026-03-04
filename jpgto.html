@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gelişmiş Belge Dönüştürücü (JPG → PDF, DOC, XLS, TXT)</title>
+    <!-- Kütüphaneler -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <style>
+        /* Önceki tasarımın aynısı, küçük eklemeler */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 900px;
+            padding: 30px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.2em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.95em;
+        }
+
+        .upload-area {
+            border: 3px dashed #cbd5e0;
+            border-radius: 15px;
+            padding: 40px 20px;
+            text-align: center;
+            background: #f8fafc;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 25px;
+        }
+
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #667eea;
+            background: #e6e9ff;
+        }
+
+        .upload-area i {
+            font-size: 48px;
+            color: #667eea;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .upload-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 15px;
+        }
+
+        .upload-btn:hover {
+            background: #5a67d8;
+        }
+
+        .file-info {
+            margin-top: 15px;
+            color: #4a5568;
+            font-size: 14px;
+        }
+
+        .preview-section {
+            margin-top: 30px;
+        }
+
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .preview-header h3 {
+            color: #333;
+        }
+
+        .image-list {
+            background: #f1f5f9;
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .image-item {
+            background: white;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        .image-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .image-item img {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 5px;
+        }
+
+        .item-details {
+            flex: 1;
+        }
+
+        .item-name {
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 14px;
+        }
+
+        .item-size {
+            color: #718096;
+            font-size: 12px;
+        }
+
+        .remove-btn {
+            background: #feb2b2;
+            color: #c53030;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .remove-btn:hover {
+            background: #fc8181;
+            color: white;
+        }
+
+        /* Format seçim alanı */
+        .format-selector {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid #e2e8f0;
+        }
+
+        .format-title {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+
+        .format-options {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .format-option {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .format-option input[type="radio"] {
+            display: none;
+        }
+
+        .format-option label {
+            display: block;
+            padding: 15px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .format-option input[type="radio"]:checked + label {
+            border-color: #667eea;
+            background: #e6e9ff;
+            color: #5a67d8;
+        }
+
+        .format-option label:hover {
+            border-color: #a0aec0;
+        }
+
+        .ocr-options {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px dashed #cbd5e0;
+        }
+
+        .language-select {
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            width: 200px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #edf2f7;
+            border-radius: 3px;
+            margin: 15px 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #667eea;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .extracted-text {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            border: 1px solid #e2e8f0;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 13px;
+            display: none;
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 16px;
+            min-width: 150px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: #edf2f7;
+            color: #4a5568;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        .status {
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 500;
+            display: none;
+        }
+
+        .status.success {
+            background: #c6f6d5;
+            color: #22543d;
+            display: block;
+        }
+
+        .status.error {
+            background: #fed7d7;
+            color: #742a2a;
+            display: block;
+        }
+
+        .status.info {
+            background: #bee3f8;
+            color: #2c5282;
+            display: block;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #a0aec0;
+            font-size: 14px;
+        }
+
+        .badge {
+            background: #48bb78;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-block;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 Gelişmiş Belge Dönüştürücü</h1>
+        <p class="subtitle">
+            Resimlerinizi seçin, dönüştürmek istediğiniz formatı belirleyin. 
+            <span class="badge">Yeni: DOC, XLS, TXT desteği</span>
+        </p>
+
+        <!-- Dosya Yükleme Alanı -->
+        <div class="upload-area" id="uploadArea">
+            <i>📸</i>
+            <p>Resimlerinizi sürükleyip bırakın veya</p>
+            <button class="upload-btn" id="fileInputBtn">Bilgisayardan Seç</button>
+            <input type="file" id="fileInput" multiple accept="image/jpeg,image/jpg,image/png" style="display: none;">
+            <div class="file-info" id="fileInfo">Desteklenen: JPG, JPEG, PNG</div>
+        </div>
+
+        <!-- Önizleme Bölümü -->
+        <div class="preview-section" id="previewSection" style="display: none;">
+            <div class="preview-header">
+                <h3>📋 Yüklenecek Resimler</h3>
+                <button class="btn-secondary" id="clearAllBtn" style="padding: 8px 15px; font-size: 14px;">Tümünü Temizle</button>
+            </div>
+            <div class="image-list" id="imageList">
+                <!-- Resimler JavaScript ile dinamik eklenecek -->
+            </div>
+        </div>
+
+        <!-- Format Seçici (YENİ) -->
+        <div class="format-selector">
+            <div class="format-title">🎯 Dönüştürme Formatı</div>
+            <div class="format-options">
+                <div class="format-option">
+                    <input type="radio" name="format" id="formatPDF" value="pdf" checked>
+                    <label for="formatPDF">📕 PDF (Görsel)</label>
+                </div>
+                <div class="format-option">
+                    <input type="radio" name="format" id="formatDOC" value="doc">
+                    <label for="formatDOC">📝 Word (DOC)</label>
+                </div>
+                <div class="format-option">
+                    <input type="radio" name="format" id="formatXLS" value="xls">
+                    <label for="formatXLS">📊 Excel (XLS)</label>
+                </div>
+                <div class="format-option">
+                    <input type="radio" name="format" id="formatTXT" value="txt">
+                    <label for="formatTXT">📃 Düz Metin (TXT)</label>
+                </div>
+            </div>
+
+            <!-- OCR Dili Seçici (DOC/XLS/TXT için) -->
+            <div class="ocr-options" id="ocrOptions" style="display: none;">
+                <label for="language">OCR Dili (metin tanıma için):</label>
+                <select id="language" class="language-select">
+                    <option value="tur">Türkçe</option>
+                    <option value="eng" selected>İngilizce</option>
+                    <option value="fra">Fransızca</option>
+                    <option value="deu">Almanca</option>
+                    <option value="spa">İspanyolca</option>
+                    <option value="ita">İtalyanca</option>
+                    <option value="rus">Rusça</option>
+                    <option value="ara">Arapça</option>
+                </select>
+                <p style="font-size: 12px; color: #718096; margin-top: 10px;">
+                    ⚡ Not: Türkçe karakter desteği için "tur" seçin. İşlem biraz zaman alabilir.
+                </p>
+            </div>
+        </div>
+
+        <!-- İlerleme Çubuğu -->
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <!-- Çıkarılan Metin Önizleme (DOC/XLS/TXT için) -->
+        <div class="extracted-text" id="extractedText"></div>
+
+        <!-- İşlem Butonları -->
+        <div class="actions">
+            <button class="btn btn-primary" id="convertBtn" disabled>🔄 Dönüştür</button>
+        </div>
+
+        <!-- Durum Mesajları -->
+        <div class="status" id="status"></div>
+
+        <footer>
+            ⚡ PDF görsel olarak kaydedilir. DOC/XLS/TXT için OCR (optik karakter tanıma) kullanılır.
+            Tüm işlemler tarayıcınızda gerçekleşir.
+        </footer>
+    </div>
+
+    <script>
+        (function() {
+            const { jsPDF } = window.jspdf;
+            
+            // DOM elementleri
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            const fileInputBtn = document.getElementById('fileInputBtn');
+            const previewSection = document.getElementById('previewSection');
+            const imageList = document.getElementById('imageList');
+            const convertBtn = document.getElementById('convertBtn');
+            const statusDiv = document.getElementById('status');
+            const clearAllBtn = document.getElementById('clearAllBtn');
+            const fileInfo = document.getElementById('fileInfo');
+            const ocrOptions = document.getElementById('ocrOptions');
+            const formatRadios = document.querySelectorAll('input[name="format"]');
+            const languageSelect = document.getElementById('language');
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            const extractedTextDiv = document.getElementById('extractedText');
+
+            // Uygulama durumu
+            let imageItems = [];
+            let isProcessing = false;
+
+            // Format değiştiğinde OCR seçeneklerini göster/gizle
+            formatRadios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const format = e.target.value;
+                    // PDF dışındaki formatlar için OCR seçeneklerini göster
+                    if (format === 'doc' || format === 'xls' || format === 'txt') {
+                        ocrOptions.style.display = 'block';
+                    } else {
+                        ocrOptions.style.display = 'none';
+                    }
+                });
+            });
+
+            // Yardımcı fonksiyonlar
+            function showStatus(message, type = 'info') {
+                statusDiv.textContent = message;
+                statusDiv.className = 'status ' + type;
+                if (type !== 'error') {
+                    setTimeout(() => {
+                        if (statusDiv.classList.contains(type)) {
+                            statusDiv.style.display = 'none';
+                            statusDiv.className = 'status';
+                        }
+                    }, 5000);
+                }
+            }
+
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+            }
+
+            function updateProgress(percent) {
+                progressBar.style.display = 'block';
+                progressFill.style.width = percent + '%';
+                if (percent >= 100) {
+                    setTimeout(() => {
+                        progressBar.style.display = 'none';
+                        progressFill.style.width = '0%';
+                    }, 1000);
+                }
+            }
+
+            function updatePreview() {
+                if (imageItems.length === 0) {
+                    previewSection.style.display = 'none';
+                    convertBtn.disabled = true;
+                    return;
+                }
+
+                previewSection.style.display = 'block';
+                convertBtn.disabled = false;
+                imageList.innerHTML = '';
+
+                imageItems.forEach((item, index) => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'image-item';
+                    itemDiv.dataset.index = index;
+
+                    const img = document.createElement('img');
+                    img.src = item.dataURL;
+
+                    const detailsDiv = document.createElement('div');
+                    detailsDiv.className = 'item-details';
+                    detailsDiv.innerHTML = `
+                        <div class="item-name">${item.file.name}</div>
+                        <div class="item-size">${formatFileSize(item.file.size)}</div>
+                    `;
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-btn';
+                    removeBtn.innerHTML = '✕';
+                    removeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        imageItems.splice(index, 1);
+                        updatePreview();
+                        fileInfo.textContent = imageItems.length + ' resim seçili.';
+                    };
+
+                    itemDiv.appendChild(img);
+                    itemDiv.appendChild(detailsDiv);
+                    itemDiv.appendChild(removeBtn);
+                    imageList.appendChild(itemDiv);
+                });
+            }
+
+            function processFiles(files) {
+                if (!files || files.length === 0) return;
+
+                const imageFiles = Array.from(files).filter(file => 
+                    file.type === 'image/jpeg' || file.type === 'image/jpg' || file.type === 'image/png'
+                );
+
+                if (imageFiles.length === 0) {
+                    showStatus('Lütfen geçerli resim dosyaları seçin (JPG, JPEG, PNG).', 'error');
+                    return;
+                }
+
+                let pending = imageFiles.length;
+                let addedCount = 0;
+
+                imageFiles.forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        imageItems.push({
+                            file: file,
+                            dataURL: e.target.result
+                        });
+                        addedCount++;
+                        if (addedCount === pending) {
+                            updatePreview();
+                            fileInfo.textContent = imageItems.length + ' resim seçili.';
+                            showStatus(addedCount + ' resim başarıyla eklendi.', 'success');
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            // OCR ile metin çıkarma
+            async function extractTextFromImage(imageItem, language) {
+                return new Promise((resolve, reject) => {
+                    Tesseract.recognize(
+                        imageItem.dataURL,
+                        language,
+                        {
+                            logger: m => {
+                                if (m.status === 'recognizing text') {
+                                    updateProgress(m.progress * 100);
+                                }
+                            }
+                        }
+                    ).then(({ data: { text } }) => {
+                        resolve(text);
+                    }).catch(reject);
+                });
+            }
+
+            // Ana dönüştürme fonksiyonu
+            async function convert() {
+                if (imageItems.length === 0) {
+                    showStatus('Lütfen önce resim ekleyin.', 'error');
+                    return;
+                }
+
+                const format = document.querySelector('input[name="format"]:checked').value;
+                
+                // PDF için doğrudan işle
+                if (format === 'pdf') {
+                    await createPDF();
+                    return;
+                }
+
+                // DOC, XLS, TXT için OCR uygula
+                showStatus('OCR başlatılıyor, bu işlem birkaç dakika sürebilir...', 'info');
+                isProcessing = true;
+                convertBtn.disabled = true;
+                extractedTextDiv.style.display = 'none';
+                
+                try {
+                    const language = languageSelect.value;
+                    let allText = '';
+                    
+                    for (let i = 0; i < imageItems.length; i++) {
+                        showStatus(`Resim ${i+1}/${imageItems.length} işleniyor...`, 'info');
+                        const text = await extractTextFromImage(imageItems[i], language);
+                        allText += text + '\n\n---\n\n';
+                    }
+
+                    // Çıkarılan metni göster
+                    extractedTextDiv.textContent = allText;
+                    extractedTextDiv.style.display = 'block';
+
+                    // Formata göre dosya oluştur
+                    if (format === 'txt') {
+                        downloadTXT(allText);
+                    } else if (format === 'doc') {
+                        downloadDOC(allText);
+                    } else if (format === 'xls') {
+                        downloadXLS(allText);
+                    }
+
+                    showStatus('Dönüşüm tamamlandı!', 'success');
+                } catch (error) {
+                    console.error('OCR hatası:', error);
+                    showStatus('OCR işlemi sırasında hata oluştu.', 'error');
+                } finally {
+                    isProcessing = false;
+                    convertBtn.disabled = false;
+                    updateProgress(100);
+                }
+            }
+
+            // PDF oluştur (önceki versiyondan)
+            async function createPDF() {
+                showStatus('PDF oluşturuluyor...', 'info');
+                convertBtn.disabled = true;
+
+                try {
+                    const pdf = new jsPDF({
+                        orientation: 'p',
+                        unit: 'mm',
+                        format: 'a4'
+                    });
+
+                    for (let i = 0; i < imageItems.length; i++) {
+                        if (i > 0) pdf.addPage();
+
+                        const img = new Image();
+                        img.src = imageItems[i].dataURL;
+                        
+                        await new Promise((resolve, reject) => {
+                            img.onload = () => {
+                                try {
+                                    const pageWidth = pdf.internal.pageSize.getWidth();
+                                    const pageHeight = pdf.internal.pageSize.getHeight();
+                                    const imgWidth = img.width;
+                                    const imgHeight = img.height;
+                                    const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
+                                    
+                                    const width = imgWidth * ratio;
+                                    const height = imgHeight * ratio;
+                                    const x = (pageWidth - width) / 2;
+                                    const y = (pageHeight - height) / 2;
+
+                                    pdf.addImage(img, 'JPEG', x, y, width, height, undefined, 'FAST');
+                                    resolve();
+                                } catch (err) {
+                                    reject(err);
+                                }
+                            };
+                            img.onerror = reject;
+                        });
+                    }
+
+                    pdf.save('donusturulen.pdf');
+                    showStatus('PDF başarıyla oluşturuldu!', 'success');
+                } catch (error) {
+                    showStatus('PDF oluşturulurken hata oluştu.', 'error');
+                } finally {
+                    convertBtn.disabled = false;
+                }
+            }
+
+            // TXT indir
+            function downloadTXT(text) {
+                const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'çıkarılan_metin.txt';
+                link.click();
+                URL.revokeObjectURL(link.href);
+            }
+
+            // DOC indir (aslında HTML formatında zengin metin)
+            function downloadDOC(text) {
+                // Basit bir HTML belgesi oluştur (Word açabilir)
+                const htmlContent = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>Çıkarılan Metin</title>
+                        <style>
+                            body { font-family: 'Times New Roman', serif; margin: 2cm; }
+                            p { margin: 0 0 10px 0; }
+                        </style>
+                    </head>
+                    <body>
+                        ${text.split('\n').map(line => `<p>${line}</p>`).join('')}
+                    </body>
+                    </html>
+                `;
+                
+                const blob = new Blob([htmlContent], { type: 'application/msword' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'çıkarılan_metin.doc';
+                link.click();
+                URL.revokeObjectURL(link.href);
+            }
+
+            // XLS indir (basit tablo)
+            function downloadXLS(text) {
+                // Metni satırlara ayır, her satırı bir hücreye yerleştir
+                const lines = text.split('\n');
+                const data = lines.map(line => [line]);
+                
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                XLSX.utils.book_append_sheet(wb, ws, "Sayfa1");
+                
+                // Excel dosyasını indir
+                XLSX.writeFile(wb, "çıkarılan_veri.xlsx");
+            }
+
+            function clearAll() {
+                imageItems = [];
+                updatePreview();
+                fileInfo.textContent = 'Desteklenen: JPG, JPEG, PNG';
+                extractedTextDiv.style.display = 'none';
+                showStatus('Tüm resimler temizlendi.', 'info');
+            }
+
+            // Olay dinleyicileri
+            fileInputBtn.addEventListener('click', () => fileInput.click());
+
+            fileInput.addEventListener('change', (e) => {
+                processFiles(e.target.files);
+                fileInput.value = '';
+            });
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                processFiles(e.dataTransfer.files);
+            });
+
+            clearAllBtn.addEventListener('click', clearAll);
+            convertBtn.addEventListener('click', convert);
+
+            // Başlangıç ayarları
+            previewSection.style.display = 'none';
+        })();
+    </script>
+</body>
+</html>
