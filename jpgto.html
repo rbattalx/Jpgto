@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -29,7 +30,7 @@
         .container {
             background: white;
             border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             width: 100%;
             max-width: 900px;
             padding: 30px;
@@ -60,7 +61,8 @@
             margin-bottom: 25px;
         }
 
-        .upload-area:hover, .upload-area.dragover {
+        .upload-area:hover,
+        .upload-area.dragover {
             border-color: #667eea;
             background: #e6e9ff;
         }
@@ -126,7 +128,7 @@
             display: flex;
             align-items: center;
             gap: 15px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
             border: 1px solid #e2e8f0;
         }
 
@@ -218,7 +220,7 @@
             font-weight: 500;
         }
 
-        .format-option input[type="radio"]:checked + label {
+        .format-option input[type="radio"]:checked+label {
             border-color: #667eea;
             background: #e6e9ff;
             color: #5a67d8;
@@ -364,11 +366,12 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>📄 Gelişmiş Belge Dönüştürücü</h1>
         <p class="subtitle">
-            Resimlerinizi seçin, dönüştürmek istediğiniz formatı belirleyin. 
+            Resimlerinizi seçin, dönüştürmek istediğiniz formatı belirleyin.
             <span class="badge">Yeni: DOC, XLS, TXT desteği</span>
         </p>
 
@@ -377,15 +380,17 @@
             <i>📸</i>
             <p>Resimlerinizi sürükleyip bırakın veya</p>
             <button class="upload-btn" id="fileInputBtn">Bilgisayardan Seç</button>
-            <input type="file" id="fileInput" multiple accept="image/jpeg,image/jpg,image/png" style="display: none;">
-            <div class="file-info" id="fileInfo">Desteklenen: JPG, JPEG, PNG</div>
+            <input type="file" id="fileInput" multiple accept="image/jpeg,image/jpg,image/png,application/pdf"
+                style="display: none;">
+            <div class="file-info" id="fileInfo">Desteklenen: JPG, JPEG, PNG, PDF</div>
         </div>
 
         <!-- Önizleme Bölümü -->
         <div class="preview-section" id="previewSection" style="display: none;">
             <div class="preview-header">
                 <h3>📋 Yüklenecek Resimler</h3>
-                <button class="btn-secondary" id="clearAllBtn" style="padding: 8px 15px; font-size: 14px;">Tümünü Temizle</button>
+                <button class="btn-secondary" id="clearAllBtn" style="padding: 8px 15px; font-size: 14px;">Tümünü
+                    Temizle</button>
             </div>
             <div class="image-list" id="imageList">
                 <!-- Resimler JavaScript ile dinamik eklenecek -->
@@ -411,6 +416,10 @@
                 <div class="format-option">
                     <input type="radio" name="format" id="formatTXT" value="txt">
                     <label for="formatTXT">📃 Düz Metin (TXT)</label>
+                </div>
+                <div class="format-option">
+                    <input type="radio" name="format" id="formatJPG" value="jpg">
+                    <label for="formatJPG">🖼️ PDF → JPG</label>
                 </div>
             </div>
 
@@ -456,9 +465,9 @@
     </div>
 
     <script>
-        (function() {
+        (function () {
             const { jsPDF } = window.jspdf;
-            
+
             // DOM elementleri
             const uploadArea = document.getElementById('uploadArea');
             const fileInput = document.getElementById('fileInput');
@@ -572,12 +581,12 @@
             function processFiles(files) {
                 if (!files || files.length === 0) return;
 
-                const imageFiles = Array.from(files).filter(file => 
-                    file.type === 'image/jpeg' || file.type === 'image/jpg' || file.type === 'image/png'
+                const imageFiles = Array.from(files).filter(file =>
+                    file.type === 'application/pdf' || file.type === 'image/jpeg' || file.type === 'image/jpg' || file.type === 'image/png'
                 );
 
                 if (imageFiles.length === 0) {
-                    showStatus('Lütfen geçerli resim dosyaları seçin (JPG, JPEG, PNG).', 'error');
+                    showStatus('Lütfen geçerli resim veya PDF dosyaları seçin (JPG, JPEG, PNG, PDF).', 'error');
                     return;
                 }
 
@@ -629,10 +638,13 @@
                 }
 
                 const format = document.querySelector('input[name="format"]:checked').value;
-                
+
                 // PDF için doğrudan işle
                 if (format === 'pdf') {
                     await createPDF();
+                    return;
+                } else if (format === "jpg") {
+                    await downloadJPG();
                     return;
                 }
 
@@ -641,13 +653,13 @@
                 isProcessing = true;
                 convertBtn.disabled = true;
                 extractedTextDiv.style.display = 'none';
-                
+
                 try {
                     const language = languageSelect.value;
                     let allText = '';
-                    
+
                     for (let i = 0; i < imageItems.length; i++) {
-                        showStatus(`Resim ${i+1}/${imageItems.length} işleniyor...`, 'info');
+                        showStatus(`Resim ${i + 1}/${imageItems.length} işleniyor...`, 'info');
                         const text = await extractTextFromImage(imageItems[i], language);
                         allText += text + '\n\n---\n\n';
                     }
@@ -693,7 +705,7 @@
 
                         const img = new Image();
                         img.src = imageItems[i].dataURL;
-                        
+
                         await new Promise((resolve, reject) => {
                             img.onload = () => {
                                 try {
@@ -702,7 +714,7 @@
                                     const imgWidth = img.width;
                                     const imgHeight = img.height;
                                     const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
-                                    
+
                                     const width = imgWidth * ratio;
                                     const height = imgHeight * ratio;
                                     const x = (pageWidth - width) / 2;
@@ -756,7 +768,7 @@
                     </body>
                     </html>
                 `;
-                
+
                 const blob = new Blob([htmlContent], { type: 'application/msword' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
@@ -770,19 +782,34 @@
                 // Metni satırlara ayır, her satırı bir hücreye yerleştir
                 const lines = text.split('\n');
                 const data = lines.map(line => [line]);
-                
+
                 const wb = XLSX.utils.book_new();
                 const ws = XLSX.utils.aoa_to_sheet(data);
                 XLSX.utils.book_append_sheet(wb, ws, "Sayfa1");
-                
+
                 // Excel dosyasını indir
                 XLSX.writeFile(wb, "çıkarılan_veri.xlsx");
+            }
+
+            // PDF TO JPG oluştur
+            async function downloadJPG() {
+                imageItems.forEach((item, index) => {
+                    if (item.dataURL && item.dataURL.startsWith('data:')) {
+                        // DataURL'den direkt olarak link oluştur
+                        const link = document.createElement('a');
+                        link.href = item.dataURL;
+                        link.download = `image_${index + 1}.jpg`; // İndirme dosya adı
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+                });
             }
 
             function clearAll() {
                 imageItems = [];
                 updatePreview();
-                fileInfo.textContent = 'Desteklenen: JPG, JPEG, PNG';
+                fileInfo.textContent = 'Desteklenen: JPG, JPEG, PNG, PDF';
                 extractedTextDiv.style.display = 'none';
                 showStatus('Tüm resimler temizlendi.', 'info');
             }
@@ -818,4 +845,5 @@
         })();
     </script>
 </body>
+
 </html>
