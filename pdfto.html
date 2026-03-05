@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF → Word/Excel/TXT/JPG Dönüştürücü</title>
+    
+    <!-- Kütüphaneler -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { text-align: center; margin-bottom: 10px; color: #333; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; }
+        
+        /* Yükleme Alanı */
+        .upload-area {
+            border: 3px dashed #cbd5e0;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: #f8fafc;
+            cursor: pointer;
+            margin-bottom: 30px;
+            transition: all 0.3s;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #667eea;
+            background: #e6e9ff;
+        }
+        .upload-icon { font-size: 48px; margin-bottom: 10px; }
+        .upload-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 15px;
+        }
+        .file-info { margin-top: 10px; color: #718096; }
+        
+        /* Ana Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+        
+        /* PDF Önizleme */
+        .preview-section {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .page-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .page-card {
+            background: white;
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+        .page-card.selected {
+            border-color: #667eea;
+            background: #e6e9ff;
+        }
+        .page-card img {
+            width: 100%;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+        .page-number {
+            margin-top: 5px;
+            font-size: 12px;
+            color: #4a5568;
+        }
+        
+        /* Kontrol Paneli */
+        .control-panel {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .control-group {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .control-title {
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #2d3748;
+        }
+        
+        /* Format Seçici */
+        .format-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .format-card {
+            padding: 15px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .format-card:hover {
+            border-color: #a0aec0;
+        }
+        .format-card.selected {
+            border-color: #667eea;
+            background: #e6e9ff;
+        }
+        .format-icon { font-size: 24px; margin-bottom: 5px; }
+        .format-name { font-weight: 500; }
+        
+        /* OCR Dili Seçici */
+        .language-select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        
+        /* Butonlar */
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 8px 15px;
+            background: white;
+            border: 1px solid #cbd5e0;
+            border-radius: 5px;
+            cursor: pointer;
+            flex: 1;
+        }
+        .btn:hover { background: #edf2f7; }
+        .btn.primary {
+            background: #667eea;
+            color: white;
+            border: none;
+        }
+        .btn.primary:hover { background: #5a67d8; }
+        
+        /* Progress */
+        .progress {
+            width: 100%;
+            height: 6px;
+            background: #edf2f7;
+            border-radius: 3px;
+            margin: 15px 0;
+            overflow: hidden;
+            display: none;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #667eea;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        /* Status */
+        .status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+        .status.success {
+            background: #c6f6d5;
+            color: #22543d;
+            display: block;
+        }
+        .status.error {
+            background: #fed7d7;
+            color: #742a2a;
+            display: block;
+        }
+        .status.info {
+            background: #bee3f8;
+            color: #2c5282;
+            display: block;
+        }
+        
+        /* Metin Önizleme */
+        .text-preview {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            display: none;
+        }
+        
+        /* Dönüştür Butonu */
+        .convert-btn {
+            width: 100%;
+            padding: 15px;
+            background: #48bb78;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .convert-btn:hover { background: #38a169; }
+        .convert-btn:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+        }
+        
+        /* İlerleme Detayı */
+        .progress-detail {
+            font-size: 12px;
+            color: #718096;
+            text-align: center;
+            margin-top: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 PDF → Word/Excel/TXT/JPG Dönüştürücü</h1>
+        <p class="subtitle">PDF dosyalarınızı düzenlenebilir formatlara çevirin</p>
+        
+        <!-- Yükleme Alanı -->
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📄</div>
+            <p>PDF dosyalarını sürükleyip bırakın veya</p>
+            <button class="upload-btn" id="fileInputBtn">PDF Seç</button>
+            <input type="file" id="fileInput" multiple accept=".pdf" style="display: none;">
+            <div class="file-info" id="fileCount">Henüz PDF seçilmedi</div>
+        </div>
+        
+        <!-- Ana Grid -->
+        <div class="main-grid">
+            <!-- Sol Kolon - PDF Sayfaları -->
+            <div class="preview-section">
+                <div class="preview-header">
+                    <h3>📑 PDF Sayfaları</h3>
+                    <div class="btn-group">
+                        <button class="btn" id="selectAllPages">Tümünü Seç</button>
+                        <button class="btn" id="deselectAllPages">Temizle</button>
+                    </div>
+                </div>
+                <div class="page-grid" id="pageGrid">
+                    <!-- Sayfalar buraya eklenecek -->
+                </div>
+            </div>
+            
+            <!-- Sağ Kolon - Kontroller -->
+            <div class="control-panel">
+                <!-- Çıkış Formatı -->
+                <div class="control-group">
+                    <div class="control-title">📋 Çıkış Formatı</div>
+                    <div class="format-grid" id="formatGrid">
+                        <div class="format-card selected" data-format="doc">
+                            <div class="format-icon">📝</div>
+                            <div class="format-name">Word (DOC)</div>
+                        </div>
+                        <div class="format-card" data-format="xlsx">
+                            <div class="format-icon">📊</div>
+                            <div class="format-name">Excel (XLSX)</div>
+                        </div>
+                        <div class="format-card" data-format="txt">
+                            <div class="format-icon">📃</div>
+                            <div class="format-name">TXT</div>
+                        </div>
+                        <div class="format-card" data-format="jpg">
+                            <div class="format-icon">🖼️</div>
+                            <div class="format-name">JPG</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- OCR Ayarları (Metin formatları için) -->
+                <div class="control-group" id="ocrSettings">
+                    <div class="control-title">🔤 OCR Ayarları</div>
+                    <select class="language-select" id="ocrLanguage">
+                        <option value="tur">Türkçe</option>
+                        <option value="eng" selected>İngilizce</option>
+                        <option value="fra">Fransızca</option>
+                        <option value="deu">Almanca</option>
+                        <option value="spa">İspanyolca</option>
+                        <option value="ita">İtalyanca</option>
+                        <option value="rus">Rusça</option>
+                        <option value="ara">Arapça</option>
+                    </select>
+                    <p style="font-size: 12px; color: #718096; margin-top: 10px;">
+                        ⚡ OCR, PDF'teki yazıları tanır. İşlem süresi sayfa sayısına göre değişir.
+                    </p>
+                </div>
+                
+                <!-- JPG Ayarları -->
+                <div class="control-group" id="jpgSettings" style="display: none;">
+                    <div class="control-title">🖼️ JPG Ayarları</div>
+                    <div style="margin-bottom: 10px;">
+                        <label>Çözünürlük:</label>
+                        <select id="jpgResolution" style="width: 100%; padding: 8px; margin-top: 5px;">
+                            <option value="1">Düşük (72 DPI)</option>
+                            <option value="1.5" selected>Orta (150 DPI)</option>
+                            <option value="2">Yüksek (300 DPI)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Kalite:</label>
+                        <select id="jpgQuality" style="width: 100%; padding: 8px; margin-top: 5px;">
+                            <option value="0.9">En İyi</option>
+                            <option value="0.8" selected>Yüksek</option>
+                            <option value="0.6">Orta</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Sayfa Seçenekleri -->
+                <div class="control-group">
+                    <div class="control-title">📄 Sayfa Seçenekleri</div>
+                    <div style="margin-bottom: 10px;">
+                        <label>Sayfa Aralığı:</label>
+                        <input type="text" id="pageRange" placeholder="1,3,5-10 veya all" value="all" style="width: 100%; padding: 8px; margin-top: 5px;">
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn" id="extractTextBtn">📝 Metin Çıkar</button>
+                        <button class="btn" id="clearTextBtn">🗑️ Temizle</button>
+                    </div>
+                </div>
+                
+                <!-- Metin Önizleme -->
+                <div class="text-preview" id="textPreview"></div>
+                
+                <!-- Progress -->
+                <div class="progress" id="progress">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-detail" id="progressDetail"></div>
+                
+                <!-- Status -->
+                <div class="status" id="status"></div>
+                
+                <!-- Dönüştür Butonu -->
+                <button class="convert-btn" id="convertBtn" disabled>🚀 DÖNÜŞTÜR</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // PDF.js worker
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            
+            // DOM elementleri
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            const fileInputBtn = document.getElementById('fileInputBtn');
+            const pageGrid = document.getElementById('pageGrid');
+            const fileCount = document.getElementById('fileCount');
+            const convertBtn = document.getElementById('convertBtn');
+            const statusDiv = document.getElementById('status');
+            const progress = document.getElementById('progress');
+            const progressBar = document.getElementById('progressBar');
+            const progressDetail = document.getElementById('progressDetail');
+            const textPreview = document.getElementById('textPreview');
+            const ocrSettings = document.getElementById('ocrSettings');
+            const jpgSettings = document.getElementById('jpgSettings');
+            
+            // Format seçimi
+            const formatCards = document.querySelectorAll('.format-card');
+            const formatGrid = document.getElementById('formatGrid');
+            
+            // Durum değişkenleri
+            let pdfDocs = []; // { file, pdf, pages: [{pageNum, text?}] }
+            let selectedPages = new Set(); // "pdfIndex-pageNum" formatında
+            let extractedText = '';
+            let currentFormat = 'doc';
+            
+            // Format değiştirme
+            formatCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    formatCards.forEach(c => c.classList.remove('selected'));
+                    this.classList.add('selected');
+                    currentFormat = this.dataset.format;
+                    
+                    // OCR ayarlarını göster/gizle
+                    if (currentFormat === 'doc' || currentFormat === 'xlsx' || currentFormat === 'txt') {
+                        ocrSettings.style.display = 'block';
+                        jpgSettings.style.display = 'none';
+                    } else if (currentFormat === 'jpg') {
+                        ocrSettings.style.display = 'none';
+                        jpgSettings.style.display = 'block';
+                    }
+                });
+            });
+            
+            // Dosya seç
+            fileInputBtn.addEventListener('click', () => fileInput.click());
+            
+            fileInput.addEventListener('change', (e) => {
+                handlePDFs(e.target.files);
+                fileInput.value = '';
+            });
+            
+            // Sürükle bırak
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                handlePDFs(e.dataTransfer.files);
+            });
+            
+            // PDF'leri işle
+            async function handlePDFs(files) {
+                for (let file of files) {
+                    if (file.type !== 'application/pdf') {
+                        showStatus(`${file.name} PDF değil, atlandı`, 'error');
+                        continue;
+                    }
+                    
+                    try {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                        
+                        pdfDocs.push({
+                            file: file,
+                            pdf: pdf,
+                            name: file.name,
+                            pages: []
+                        });
+                        
+                        showStatus(`${file.name} yüklendi (${pdf.numPages} sayfa)`, 'success');
+                    } catch (error) {
+                        showStatus(`${file.name} yüklenemedi`, 'error');
+                    }
+                }
+                
+                updatePageGrid();
+            }
+            
+            // Sayfa grid'ini güncelle
+            async function updatePageGrid() {
+                if (pdfDocs.length === 0) {
+                    pageGrid.innerHTML = '<div style="text-align: center; padding: 50px; color: #999; grid-column: 1/-1;">PDF yüklemek için tıklayın</div>';
+                    fileCount.textContent = 'Henüz PDF yok';
+                    convertBtn.disabled = true;
+                    return;
+                }
+                
+                convertBtn.disabled = false;
+                fileCount.textContent = `${pdfDocs.length} PDF dosyası, toplam ${pdfDocs.reduce((acc, doc) => acc + doc.pdf.numPages, 0)} sayfa`;
+                
+                let html = '';
+                
+                for (let docIndex = 0; docIndex < pdfDocs.length; docIndex++) {
+                    const doc = pdfDocs[docIndex];
+                    
+                    for (let pageNum = 1; pageNum <= doc.pdf.numPages; pageNum++) {
+                        const pageId = `${docIndex}-${pageNum}`;
+                        const isSelected = selectedPages.has(pageId);
+                        
+                        // Sayfa thumbnail'ini oluştur
+                        const page = await doc.pdf.getPage(pageNum);
+                        const viewport = page.getViewport({ scale: 0.2 });
+                        const canvas = document.createElement('canvas');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                        
+                        html += `
+                            <div class="page-card ${isSelected ? 'selected' : ''}" data-pdf="${docIndex}" data-page="${pageNum}" data-id="${pageId}">
+                                <img src="${canvas.toDataURL()}">
+                                <div class="page-number">${doc.name.substring(0, 10)}... s.${pageNum}</div>
+                            </div>
+                        `;
+                    }
+                }
+                
+                pageGrid.innerHTML = html;
+                
+                // Tıklama olayları
+                document.querySelectorAll('.page-card').forEach(card => {
+                    card.addEventListener('click', function(e) {
+                        const pageId = this.dataset.id;
+                        
+                        if (e.ctrlKey || e.metaKey) {
+                            if (selectedPages.has(pageId)) {
+                                selectedPages.delete(pageId);
+                            } else {
+                                selectedPages.add(pageId);
+                            }
+                        } else {
+                            if (selectedPages.has(pageId)) {
+                                selectedPages.delete(pageId);
+                            } else {
+                                selectedPages.add(pageId);
+                            }
+                        }
+                        
+                        updatePageSelection();
+                    });
+                });
+            }
+            
+            // Sayfa seçimini güncelle
+            function updatePageSelection() {
+                document.querySelectorAll('.page-card').forEach(card => {
+                    const pageId = card.dataset.id;
+                    if (selectedPages.has(pageId)) {
+                        card.classList.add('selected');
+                    } else {
+                        card.classList.remove('selected');
+                    }
+                });
+            }
+            
+            // Tüm sayfaları seç
+            document.getElementById('selectAllPages').addEventListener('click', () => {
+                selectedPages.clear();
+                document.querySelectorAll('.page-card').forEach(card => {
+                    selectedPages.add(card.dataset.id);
+                });
+                updatePageSelection();
+            });
+            
+            // Seçimi temizle
+            document.getElementById('deselectAllPages').addEventListener('click', () => {
+                selectedPages.clear();
+                updatePageSelection();
+            });
+            
+            // Metin çıkar
+            document.getElementById('extractTextBtn').addEventListener('click', async () => {
+                if (selectedPages.size === 0) {
+                    showStatus('Lütfen sayfa seçin', 'error');
+                    return;
+                }
+                
+                const language = document.getElementById('ocrLanguage').value;
+                extractedText = '';
+                textPreview.style.display = 'block';
+                textPreview.textContent = 'OCR başlatılıyor...';
+                progress.style.display = 'block';
+                progressDetail.style.display = 'block';
+                
+                let completed = 0;
+                const total = selectedPages.size;
+                
+                for (let pageId of selectedPages) {
+                    const [docIndex, pageNum] = pageId.split('-').map(Number);
+                    const doc = pdfDocs[docIndex];
+                    
+                    progressDetail.textContent = `Sayfa ${pageNum}/${total} işleniyor...`;
+                    progressBar.style.width = `${(completed / total) * 100}%`;
+                    
+                    const page = await doc.pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 2 });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                    
+                    const { data: { text } } = await Tesseract.recognize(canvas.toDataURL(), language);
+                    extractedText += `--- Sayfa ${pageNum} ---\n${text}\n\n`;
+                    
+                    textPreview.textContent = extractedText;
+                    completed++;
+                }
+                
+                progress.style.display = 'none';
+                progressDetail.style.display = 'none';
+                showStatus('Metin çıkarıldı!', 'success');
+            });
+            
+            // Metni temizle
+            document.getElementById('clearTextBtn').addEventListener('click', () => {
+                extractedText = '';
+                textPreview.style.display = 'none';
+                textPreview.textContent = '';
+            });
+            
+            // Dönüştür
+            convertBtn.addEventListener('click', async () => {
+                if (selectedPages.size === 0) {
+                    showStatus('Lütfen sayfa seçin', 'error');
+                    return;
+                }
+                
+                showStatus('Dönüştürülüyor...', 'info');
+                convertBtn.disabled = true;
+                progress.style.display = 'block';
+                progressDetail.style.display = 'block';
+                
+                try {
+                    if (currentFormat === 'doc') {
+                        await convertToDoc();
+                    } else if (currentFormat === 'xlsx') {
+                        await convertToExcel();
+                    } else if (currentFormat === 'txt') {
+                        await convertToTxt();
+                    } else if (currentFormat === 'jpg') {
+                        await convertToJpg();
+                    }
+                    
+                    showStatus('Dönüşüm tamamlandı!', 'success');
+                } catch (error) {
+                    console.error(error);
+                    showStatus('Hata: ' + error.message, 'error');
+                } finally {
+                    convertBtn.disabled = false;
+                    setTimeout(() => {
+                        progress.style.display = 'none';
+                        progressBar.style.width = '0%';
+                        progressDetail.style.display = 'none';
+                    }, 1000);
+                }
+            });
+            
+            // Word'e çevir (DOC)
+            async function convertToDoc() {
+                const language = document.getElementById('ocrLanguage').value;
+                let html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PDF Dönüştürülen</title>';
+                html += '<style>body { font-family: "Times New Roman", serif; margin: 2cm; } ';
+                html += 'h1 { color: #333; } .page-break { page-break-after: always; }</style></head><body>';
+                
+                let completed = 0;
+                const total = selectedPages.size;
+                
+                for (let pageId of selectedPages) {
+                    const [docIndex, pageNum] = pageId.split('-').map(Number);
+                    const doc = pdfDocs[docIndex];
+                    
+                    progressDetail.textContent = `Sayfa ${pageNum} işleniyor...`;
+                    progressBar.style.width = `${(completed / total) * 100}%`;
+                    
+                    const page = await doc.pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 2 });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                    
+                    const { data: { text } } = await Tesseract.recognize(canvas.toDataURL(), language);
+                    
+                    html += `<h2>Sayfa ${pageNum}</h2>`;
+                    html += `<p>${text.replace(/\n/g, '</p><p>')}</p>`;
+                    html += '<div class="page-break"></div>';
+                    
+                    completed++;
+                }
+                
+                html += '</body></html>';
+                
+                const blob = new Blob([html], { type: 'application/msword' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'donusturulen.doc';
+                link.click();
+            }
+            
+            // Excel'e çevir
+            async function convertToExcel() {
+                const language = document.getElementById('ocrLanguage').value;
+                const wb = XLSX.utils.book_new();
+                
+                let completed = 0;
+                const total = selectedPages.size;
+                
+                for (let pageId of selectedPages) {
+                    const [docIndex, pageNum] = pageId.split('-').map(Number);
+                    const doc = pdfDocs[docIndex];
+                    
+                    progressDetail.textContent = `Sayfa ${pageNum} işleniyor...`;
+                    progressBar.style.width = `${(completed / total) * 100}%`;
+                    
+                    const page = await doc.pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 2 });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                    
+                    const { data: { text } } = await Tesseract.recognize(canvas.toDataURL(), language);
+                    
+                    // Metni satırlara böl ve her satırı ayrı hücreye koy
+                    const lines = text.split('\n').filter(line => line.trim());
+                    const data = lines.map(line => [line]);
+                    
+                    const ws = XLSX.utils.aoa_to_sheet([[`Sayfa ${pageNum}`], ...data]);
+                    XLSX.utils.book_append_sheet(wb, ws, `Sayfa ${pageNum}`);
+                    
+                    completed++;
+                }
+                
+                XLSX.writeFile(wb, 'donusturulen.xlsx');
+            }
+            
+            // TXT'ye çevir
+            async function convertToTxt() {
+                const language = document.getElementById('ocrLanguage').value;
+                let text = 'PDF DÖNÜŞTÜRME\n';
+                text += '================\n\n';
+                
+                let completed = 0;
+                const total = selectedPages.size;
+                
+                for (let pageId of selectedPages) {
+                    const [docIndex, pageNum] = pageId.split('-').map(Number);
+                    const doc = pdfDocs[docIndex];
+                    
+                    progressDetail.textContent = `Sayfa ${pageNum} işleniyor...`;
+                    progressBar.style.width = `${(completed / total) * 100}%`;
+                    
+                    const page = await doc.pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 2 });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                    
+                    const { data: { text: pageText } } = await Tesseract.recognize(canvas.toDataURL(), language);
+                    
+                    text += `=== Sayfa ${pageNum} ===\n`;
+                    text += pageText;
+                    text += '\n\n';
+                    
+                    completed++;
+                }
+                
+                const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'donusturulen.txt';
+                link.click();
+            }
+            
+            // JPG'ye çevir
+            async function convertToJpg() {
+                const resolution = parseFloat(document.getElementById('jpgResolution').value);
+                const quality = parseFloat(document.getElementById('jpgQuality').value);
+                
+                let completed = 0;
+                const total = selectedPages.size;
+                
+                for (let pageId of selectedPages) {
+                    const [docIndex, pageNum] = pageId.split('-').map(Number);
+                    const doc = pdfDocs[docIndex];
+                    
+                    progressDetail.textContent = `Sayfa ${pageNum} işleniyor...`;
+                    progressBar.style.width = `${(completed / total) * 100}%`;
+                    
+                    const page = await doc.pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: resolution });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                    
+                    const link = document.createElement('a');
+                    link.download = `${doc.file.name.replace('.pdf', '')}_sayfa${pageNum}.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', quality);
+                    link.click();
+                    
+                    completed++;
+                }
+            }
+            
+            // Status mesajı
+            function showStatus(msg, type) {
+                statusDiv.className = 'status ' + type;
+                statusDiv.textContent = msg;
+                
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 3000);
+            }
+        })();
+    </script>
+</body>
+</html>
